@@ -1,0 +1,2 @@
+C:\Users\truma\source\repos\Chronos\x64\Release\Chronos.Loader.exe.lastcodeanalysissucceeded
+C:\Users\truma\source\repos\Chronos\src\Chronos.Loader\x64\Release\NativeCodeAnalysis.read.1.tlog

@@ -1,0 +1,44 @@
+;
+; Chronos.Kernel.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider = chronos
+DriverVer=01/01/2020,1.0.0.0
+CatalogFile=Chronos.Kernel.cat
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+
+[Manufacturer]
+
+%ManufacturerName%=Standard
+
+[Standard]
+
+; Define an install section so the driver can be registered as a kernel service.
+Root\Chronos = Chronos_Install
+
+[Chronos_Install]
+AddService = Chronos, 0x00000002, Chronos_Service_Inst
+
+[Chronos_Service_Inst]
+DisplayName = %DeviceDesc%
+ServiceType = 1
+StartType = 3
+ErrorControl = 1
+ServiceBinary = %12%\Chronos.sys
+
+[Strings]
+ManufacturerName="Chronos"
+DiskName="Chronos.Kernel Source Disk"
+DeviceDesc="Chronos Kernel Driver"

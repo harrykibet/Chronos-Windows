@@ -1,0 +1,13 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "c:\\users\\truma\\source\\repos\\chronos\\common\\chronos.common\\chronos.common.cpp",
+        "ProvidedModule": "",
+        "Includes": [
+            "c:\\users\\truma\\source\\repos\\chronos\\common\\chronos.common\\pch.h",
+            "c:\\users\\truma\\source\\repos\\chronos\\common\\chronos.common\\framework.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

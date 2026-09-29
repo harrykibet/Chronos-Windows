@@ -1,0 +1,25 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/Detection/" />
+  <Folder Name="/Infrastructure/">
+    <Project Path="common/Chronos.Common/Chronos.Common.vcxproj" />
+  </Folder>
+  <Folder Name="/Research/">
+    <Project Path="src/Chronos.Firmware/Chronos.Firmware.vcxproj" />
+    <Project Path="src/Chronos.Kernel/Chronos.Kernel.vcxproj">
+      <Platform Project="x64" />
+      <Deploy />
+    </Project>
+    <Project Path="src/Chronos.Loader/Chronos.Loader.vcxproj">
+      <BuildDependency Project="common/Chronos.Common/Chronos.Common.vcxproj" />
+    </Project>
+    <Project Path="src/Chronos.UserMode/Chronos.UserMode.vcxproj">
+      <BuildDependency Project="common/Chronos.Common/Chronos.Common.vcxproj" />
+    </Project>
+  </Folder>
+  <Folder Name="/Simulation/" />
+  <Folder Name="/Tests/" />
+</Solution>

@@ -285,3 +285,328 @@ The goal is to reconstruct the complete trust chain instead of relying on one fi
 ## 13. Safety Boundary
 
 Firmware experiments should use virtualized or emulated UEFI environments, disposable images, snapshots and reversible packages. Do not test experimental firmware on production hardware or systems where a firmware failure would be unacceptable.
+
+# Deep Capability Appendix
+
+This appendix turns the firmware guide from a technique overview into a research specification.
+
+## A. System-Firmware Persistence: Capability Decomposition
+
+Separate the capability into five questions:
+
+1. Acquisition — how did a process obtain authority to update firmware?
+2. Authorization — which signer or platform policy accepted the update?
+3. Write path — which firmware update mechanism performed the write?
+4. Resulting state — what firmware version/image now exists?
+5. Boot evidence — what changed in the subsequent measured/verified boot?
+
+Offensive research should study the dependency chain, not a vendor-specific flashing procedure.
+
+Defensive hypothesis:
+
+~~~text
+unexpected privileged updater
+      +
+unexpected firmware version transition
+      +
+missing maintenance/change record
+      +
+boot-measurement change
+      =
+high-value firmware investigation
+~~~
+
+The strongest signal is often the discrepancy between the claimed maintenance event and the platform state after reboot.
+
+## B. Component Firmware: Trust Boundary Analysis
+
+Component firmware should be modeled independently from host software.
+
+For every component, record:
+
+| Attribute | Research value |
+|---|---|
+| Hardware identity | Which physical component is involved |
+| Vendor | Expected firmware authority |
+| Version | Current known-good state |
+| Update channel | How legitimate updates occur |
+| Signature model | What authorizes firmware |
+| Measurement | Whether integrity can be attested |
+| Host interface | How Windows interacts with it |
+| Persistence | Whether OS reinstall affects it |
+
+Offensive value comes from persistence outside the normal host filesystem.
+
+Defensive value comes from maintaining a hardware-aware inventory rather than assuming that the disk is the only persistence surface.
+
+MITRE's current component-firmware strategy specifically discusses anomalous firmware interactions, unexpected updates and privileged firmware access.
+
+Source:
+https://attack.mitre.org/techniques/T1542/002/
+
+## C. Bootkit: Boot-Chain State Machine
+
+Research the boot path as a state machine:
+
+~~~text
+Firmware
+  ↓
+Boot manager
+  ↓
+EFI executable
+  ↓
+OS loader
+  ↓
+Kernel
+  ↓
+Drivers
+~~~
+
+For each transition record:
+
+- artifact identity;
+- signature state;
+- measurement state;
+- parent/child relationship;
+- expected location;
+- expected signer;
+- timestamp;
+- configuration source.
+
+MITRE's current T1542.003 strategy specifically calls out EFI System Partition changes, boot-record modification and privileged low-level disk access.
+
+Source:
+https://attack.mitre.org/techniques/T1542/003/
+
+The defensive experiment should ask:
+
+> Which modifications are visible before Windows starts, which become visible only after startup, and which are represented in TPM measurements?
+
+## D. EFI System Partition Forensics
+
+Chronos should build an ESP baseline containing:
+
+- approved directory layout;
+- approved boot executables;
+- hashes where stable;
+- signatures;
+- timestamps;
+- boot configuration references;
+- expected update mechanisms.
+
+Do not make a static hash list the only defense. Enterprise and OEM maintenance changes legitimately modify boot artifacts.
+
+A better model is:
+
+~~~text
+ESP artifact
++
+who changed it
++
+how it was changed
++
+why it was changed
++
+what boot state followed
+~~~
+
+## E. UEFI Variable / NVRAM Research
+
+Treat UEFI variables as stateful configuration rather than generic storage.
+
+Document:
+
+- variable identity;
+- namespace;
+- attributes;
+- expected writers;
+- lifecycle;
+- whether the value influences boot;
+- how the value is observable from Windows;
+- whether the value is measured or attested.
+
+Detection should focus on changes that are both unexpected and security-relevant.
+
+## F. Secure Boot Research
+
+Chronos should explicitly test three states:
+
+~~~text
+1. Secure Boot enabled
+2. Secure Boot disabled
+3. Secure Boot policy changed between boots
+~~~
+
+The experiment should compare:
+
+- permitted boot components;
+- measured state;
+- Windows-visible state;
+- event evidence;
+- recovery behavior.
+
+Secure Boot is an authorization control. It should not be described as a complete malware-detection mechanism.
+
+Source:
+https://learn.microsoft.com/en-us/windows/threat-protection/secure-the-windows-10-boot-process
+
+## G. Measured Boot Research
+
+Chronos should model Measured Boot as evidence collection.
+
+~~~text
+component
+   ↓
+measurement
+   ↓
+TPM PCR state
+   ↓
+attestation / comparison
+~~~
+
+Research questions:
+
+- Which startup components affect measurements?
+- How does a configuration change alter the measurements?
+- Which measurements are available to a remote verifier?
+- What does a matching measurement establish?
+- What does it not establish?
+
+Source:
+https://learn.microsoft.com/en-us/windows/security/hardware-security/tpm/how-windows-uses-the-tpm
+
+The crucial distinction is:
+
+~~~text
+Secure Boot = authorization
+Measured Boot = evidence
+~~~
+
+## H. ACPI Research
+
+ACPI experiments should maintain a reproducible artifact chain:
+
+~~~text
+ASL source
+ ↓
+IASL compiler version
+ ↓
+AML
+ ↓
+table identity
+ ↓
+firmware image
+ ↓
+OS-visible ACPI state
+~~~
+
+Record the exact source and generated artifacts so a defender can compare:
+
+~~~text
+expected table
+vs.
+observed table
+~~~
+
+This transforms ACPI from a vague firmware topic into a measurable integrity problem.
+
+TianoCore's current toolchain explicitly integrates Intel ASL/IASL and includes VS2026 definitions.
+
+Source:
+https://github.com/tianocore/edk2/blob/master/BaseTools/Conf/tools_def.template
+
+## I. EDK II Research Boundaries
+
+Firmware code should have explicit ownership boundaries:
+
+~~~text
+Platform description
+       ↓
+Package
+       ↓
+Module
+       ↓
+Firmware volume
+       ↓
+Boot environment
+~~~
+
+Chronos should not copy application architecture into firmware merely for familiarity.
+
+The important boundaries are build-time composition, firmware-volume placement, execution phase and firmware-to-OS interfaces.
+
+## J. Detection Capability Matrix
+
+For each firmware capability record:
+
+| Layer | Evidence | Detector | Limitation |
+|---|---|---|---|
+| Firmware | Version/inventory | Baseline comparison | OEM variation |
+| ESP | File and metadata | Boot artifact analytics | Legitimate updates |
+| UEFI variables | Variable changes | Policy/baseline | Platform-specific behavior |
+| Secure Boot | Policy state | Configuration monitoring | Does not prove runtime cleanliness |
+| Measured Boot | TPM measurements | Attestation | Measurement interpretation |
+| ACPI | Table content | Known-good comparison | Hardware revisions |
+| OS startup | Boot events | Correlation | OS visibility may be incomplete |
+
+## K. Cross-Layer Firmware Investigation
+
+A strong investigation should correlate:
+
+~~~text
+firmware state
+   ↓
+boot state
+   ↓
+kernel state
+   ↓
+driver state
+   ↓
+user-mode state
+~~~
+
+The lower the suspicious artifact appears in that chain, the more important independent evidence becomes.
+
+## L. Firmware Failure Modes
+
+False positives and uncertainty are especially important here:
+
+- OEM firmware changes;
+- BIOS/UEFI updates;
+- recovery environments;
+- hardware replacement;
+- virtualization differences;
+- secure-boot policy transitions;
+- expected ACPI variation.
+
+A detector that treats all firmware variation as malicious will be operationally unusable.
+
+## M. Firmware Lab Validation
+
+The preferred experiment sequence is:
+
+~~~text
+known-good firmware
+      ↓
+capture inventory
+      ↓
+capture boot measurements
+      ↓
+make one controlled change
+      ↓
+reboot
+      ↓
+capture again
+      ↓
+compare
+      ↓
+revert snapshot
+~~~
+
+The research objective is to discover what evidence a defender can reliably obtain when the change occurs below the operating system.
+
+## N. Safety Boundary
+
+All firmware experiments should use emulation, virtualization or disposable laboratory hardware specifically intended for research.
+
+Do not use production firmware, unknown flashing utilities or irreversible modification paths as part of normal Chronos experiments.

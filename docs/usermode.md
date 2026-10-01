@@ -1,229 +1,508 @@
 # Chronos User-Mode Research
 
-## Purpose
+## Mission
 
-Chronos.UserMode studies advanced behavior inside ordinary Windows processes. The goal is to understand techniques that sophisticated malware may use for execution, stealth, security-context manipulation, persistence and communications, then determine which telemetry can distinguish those behaviors from legitimate software.
+Chronos.UserMode studies advanced Windows user-mode capabilities that appear in sophisticated intrusion chains.
 
-The core model is:
+The project is organized around mechanisms rather than malware families:
 
 ~~~text
 Windows primitive
       ↓
-malware capability
+capability
       ↓
-observable behavior
+execution effect
       ↓
 telemetry
       ↓
-detection / prevention
+detection
+      ↓
+prevention
 ~~~
 
-## 1. Process Injection
-
-### Capability
-
-ATT&CK T1055 covers code execution inside another live process. Variants differ in mechanism, but the security property is consistent: execution is decoupled from the original process identity.
-
-### Offensive perspective
-
-Injection can let malicious logic execute in the context of a legitimate process and can complicate process-based detection.
-
-**Offensive/tradecraft source:**  
-https://attack.mitre.org/techniques/T1055/
-
-### Defensive perspective
-
-Correlate cross-process access, memory modification, suspicious remote thread creation, unusual DLL loads and process context. A single API call is usually weak evidence.
-
-**Detection source:**  
-MITRE T1055 detection strategy: https://attack.mitre.org/techniques/T1055/  
-Microsoft Sysmon: https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
-
-Important Sysmon events include CreateRemoteThread (8), ProcessAccess (10), ImageLoad (7) and ProcessTampering (25).
+The objective is to understand what an attacker gains, what Windows state changes, what evidence survives, and which controls can prevent or constrain the behavior.
 
 ---
 
-## 2. Reflective Code Loading
+# 1. Capability Map
 
-### Capability
+| Capability | ATT&CK | APT value | Defensive anchor |
+|---|---|---|---|
+| Process injection | T1055 | Hide execution inside another process | Cross-process memory/thread events |
+| Process hollowing | T1055.012 | Separate process identity from effective code | Process/memory consistency |
+| Reflective loading | T1620 | Reduce disk-backed provenance | Memory/thread/module evidence |
+| Token manipulation | T1134 | Alter security context | Token operations + resulting identity |
+| LOLBin/proxy execution | T1218 | Reuse trusted software | Contextual process analytics |
+| Command/scripting abuse | T1059 | Use native execution environments | Script/process lineage |
+| User-mode persistence | T1547.001 | Survive sessions/reboots | Configuration change + execution |
+| Obfuscation | T1027 | Defeat static signatures | Reconstruction behavior |
+| Process tampering | T1564-related/defense evasion | Change expected process state | Process integrity telemetry |
 
-T1620 describes code executing from process memory without the normal disk-backed execution path.
+---
+
+# 2. Process Injection
+
+## Capability
+
+T1055 covers execution of code in the address space of another live process. Current ATT&CK lists multiple sub-techniques including DLL injection, PE injection, thread execution hijacking, APC, process hollowing and process doppelgänging.
+
+Source:
+https://attack.mitre.org/techniques/T1055/
 
 ### Offensive perspective
 
-Memory-oriented execution can reduce ordinary file and module provenance.
+The architectural advantage is execution-context substitution:
 
-**Offensive/tradecraft source:**  
+~~~text
+malicious logic
+      ↓
+victim process context
+      ↓
+execution
+~~~
+
+ATT&CK explicitly describes process injection as a way to evade process-based defenses and potentially access another process's resources or privileges.
+
+### Defensive perspective
+
+MITRE's current behavioral detection correlates memory manipulation, suspicious thread creation and unusual module loading.
+
+Source:
+https://attack.mitre.org/techniques/T1055/
+
+Microsoft Sysmon can contribute:
+
+- Event 1 Process Create;
+- Event 7 Image Load;
+- Event 8 CreateRemoteThread;
+- Event 10 ProcessAccess.
+
+Source:
+https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-events
+
+### Detection hypothesis
+
+~~~text
+process A accesses process B
+        +
+memory-related activity
+        +
+thread/module change
+        +
+unexpected ancestry
+        =
+higher-confidence injection hypothesis
+~~~
+
+### Benign equivalents
+
+Legitimate software may perform similar actions:
+
+- debuggers;
+- accessibility software;
+- security products;
+- profilers;
+- application compatibility tooling.
+
+This is why one event should rarely become the detector.
+
+### Prevention
+
+- endpoint behavioral prevention;
+- process protection for high-value applications;
+- ASR where applicable;
+- least privilege;
+- application control.
+
+---
+
+# 3. Process Hollowing
+
+## Capability
+
+T1055.012 describes process hollowing.
+
+The broad concept is a legitimate process identity combined with altered effective execution state.
+
+### Offensive perspective
+
+The attacker attempts to separate:
+
+~~~text
+initial executable identity
+          ≠
+effective code identity
+~~~
+
+This is useful when analysts trust only the process image that originally created the process.
+
+Source:
+https://attack.mitre.org/techniques/T1055/012/
+
+### Defensive perspective
+
+Look for inconsistencies among:
+
+- original image;
+- mapped image state;
+- memory regions;
+- thread start;
+- module inventory;
+- signer;
+- parent process.
+
+The goal is a consistency check rather than a single "hollow process" signature.
+
+### Research question
+
+Which cross-view inconsistencies remain measurable after the process is running normally?
+
+---
+
+# 4. Reflective Code Loading
+
+## Capability
+
+T1620 covers execution of code from process memory without relying on a conventional disk-backed module transition.
+
+~~~text
+disk-backed
+artifact → image → execution
+
+memory-oriented
+data → memory → execution
+~~~
+
+### Offensive perspective
+
+This reduces ordinary file provenance.
+
+Source:
 https://attack.mitre.org/techniques/T1620/
 
 ### Defensive perspective
 
-Look for discrepancies between process identity and memory execution provenance, including executable private memory, unusual thread starts, suspicious process-access patterns and process tampering.
+Investigate discrepancies among:
 
-**Detection source:**  
-https://attack.mitre.org/techniques/T1620/  
-https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
+- executable/module inventory;
+- executable private memory;
+- thread start locations;
+- cross-process access;
+- process ancestry.
+
+Use memory evidence together with process telemetry rather than treating memory alone as malicious.
 
 ---
 
-## 3. Access Token Manipulation
+# 5. Access Token Manipulation
 
-### Capability
+## Capability
 
-Windows access tokens represent a security identity and associated privileges. T1134 covers abuse of token semantics, including token impersonation and theft.
+T1134 covers abuse of Windows access-token semantics, including impersonation/theft.
 
 ### Offensive perspective
 
-An attacker may attempt to separate the process that obtained access from the security identity under which later operations execute.
+Tokens define effective security identity and privileges.
 
-The security question becomes:
+The important transition is:
 
 ~~~text
-Which token actually authorized this operation?
+process
+ ↓
+token selection
+ ↓
+effective security context
+ ↓
+resource access
 ~~~
 
-**Offensive/tradecraft source:**  
+Source:
 https://attack.mitre.org/techniques/T1134/
 
 ### Defensive perspective
 
-Correlate token duplication/impersonation behavior with the resulting security context and process creation. MITRE's current Windows detection strategy specifically models this behavior chain.
+Correlate:
 
-**Detection source:**  
+- token duplication/impersonation;
+- resulting SID/user;
+- integrity level;
+- process creation;
+- privileged resource access.
+
+A high-value feature is a mismatch between the expected role of a process and the security context under which it performs sensitive work.
+
+Detection source:
 https://attack.mitre.org/techniques/T1134/001/
 
 ---
 
-## 4. Living-off-the-Land and Trusted Execution
+# 6. Living-off-the-Land and System Binary Proxy Execution
 
-### Capability
+## Capability
 
-APT operators may prefer native interpreters, administrative components and signed binaries over deploying new tools when that reduces operational friction.
+T1218 covers abuse of trusted operating-system binaries.
 
 ### Offensive perspective
 
-The capability exploits the difference between:
+Native utilities already exist, have legitimate uses and may carry trusted signatures.
+
+The core distinction is:
 
 ~~~text
-"this binary is normally trusted"
+trusted binary
+≠
+trusted invocation
 ~~~
 
-and:
-
-~~~text
-"this execution context is trustworthy"
-~~~
-
-Native functionality can therefore become an execution or staging mechanism.
-
-**Offensive/tradecraft sources:**  
-System Binary Proxy Execution: https://attack.mitre.org/techniques/T1218/  
-Command and Scripting Interpreter: https://attack.mitre.org/techniques/T1059/
+Source:
+https://attack.mitre.org/techniques/T1218/
 
 ### Defensive perspective
 
-Detection should be contextual. Correlate user, parent process, command line, child process, destination, signer and execution location.
+MITRE's current proxy-execution detection correlates trusted Microsoft-signed binaries with process creation, unusual parentage, module loads and network connections.
 
-Microsoft ASR explicitly targets behaviors such as script-based downloads, obfuscated scripts and code injection.
+Source:
+https://attack.mitre.org/detectionstrategies/DET0081/
 
-**Detection source:**  
-https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference
+For Regsvr32, MITRE recommends examining unusual DLL/scriptlet paths, network activity, signer state and expected parents.
+
+Source:
+https://attack.mitre.org/detectionstrategies/DET0282/
+
+### Chronos research question
+
+Can role-aware profiling distinguish legitimate administrative use from malicious proxy execution better than a static blocklist?
 
 ---
 
-## 5. User-Mode Persistence
+# 7. Command and Scripting Interpreter Abuse
 
-### Capability
+## Capability
 
-T1547.001 documents Registry Run Keys and Startup Folder persistence.
-
-The architectural pattern is:
-
-~~~text
-configuration change
-      ↓
-normal Windows startup behavior
-      ↓
-unexpected executable
-~~~
+T1059 covers command and scripting interpreters.
 
 ### Offensive perspective
 
-Persistence converts a transient foothold into repeatable execution.
+The value is availability: interpreters are already present, administrator workflows use them, and they can execute dynamically generated logic.
 
-**Offensive/tradecraft source:**  
+Source:
+https://attack.mitre.org/techniques/T1059/
+
+### Defensive perspective
+
+Profile:
+
+- parent;
+- child;
+- command-line structure;
+- script host;
+- encoding/obfuscation;
+- user;
+- destination;
+- resulting files.
+
+A scripting engine becomes much more suspicious when its surrounding execution graph is unusual.
+
+### Research question
+
+Which features distinguish administrative automation from adversary command execution without banning the interpreter itself?
+
+---
+
+# 8. User-Mode Persistence
+
+## Capability
+
+T1547.001 documents Registry Run Keys and Startup Folder persistence.
+
+### Offensive perspective
+
+The objective is to convert transient execution into recurring execution during normal user startup.
+
+Source:
 https://attack.mitre.org/techniques/T1547/001/
 
 ### Defensive perspective
 
-Correlate registry changes, startup configuration, file provenance, signature, first execution, user identity and parent process.
+Correlate:
 
-**Detection source:**  
-https://attack.mitre.org/techniques/T1547/001/  
-https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
+~~~text
+configuration change
+      +
+artifact provenance
+      +
+startup trigger
+      +
+subsequent process creation
+~~~
+
+Sysmon Registry Events 12–14 plus Event 1 Process Create can provide useful evidence.
+
+Source:
+https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-events
+
+### False positives
+
+Normal installers and enterprise software often modify startup configuration.
+
+Therefore detection should use:
+
+- signer;
+- install source;
+- user;
+- path;
+- first-seen time;
+- change initiator;
+- subsequent behavior.
 
 ---
 
-## 6. Obfuscation
+# 9. Obfuscation
 
-### Capability
+## Capability
 
-T1027 covers transformation of commands and payloads to make static analysis harder.
+T1027 changes representation of commands, scripts or files to reduce static detectability.
 
-### Offensive perspective
+MITRE documents APT19, APT32 and Aquatic Panda among actors using command or script obfuscation.
 
-Obfuscation changes representation rather than semantics.
-
-~~~text
-representation A
-      ↓
-transformation
-      ↓
-representation B
-      ↓
-same behavior
-~~~
-
-**Offensive/tradecraft source:**  
+Sources:
 https://attack.mitre.org/techniques/T1027/
+https://attack.mitre.org/techniques/T1027/010/
 
 ### Defensive perspective
 
-Prefer behavioral detection over static signatures where possible. Useful evidence includes high-entropy or encoded content, decoding before execution, abnormal command syntax and suspicious script ancestry.
+MITRE's current behavioral detection correlates suspicious processes with creation or modification of encoded/compressed/encrypted content and abnormal command syntax.
 
-**Detection source:**  
-https://attack.mitre.org/detectionstrategies/DET0378/  
-https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference
+Source:
+https://attack.mitre.org/detectionstrategies/DET0378/
+
+Chronos should measure whether behavioral features remain stable when representation changes.
 
 ---
 
-## 7. User-Mode APT Research Model
+# 10. Process Tampering
 
-A mature user-mode threat should be represented as a behavior graph:
+Process tampering is best treated as an integrity problem:
 
 ~~~text
-initial process
-   ├── obtains data
-   ├── accesses other processes
-   ├── changes security context
-   ├── manipulates memory
-   ├── loads modules
-   ├── communicates externally
-   ├── establishes persistence
-   └── transfers execution
+expected process state
+        ↓
+unexpected modification
+        ↓
+different execution behavior
 ~~~
 
-The detector should reason over relationships rather than isolated events.
+### Defensive perspective
 
-## 8. Research Questions
+Investigate changes together with:
 
-- Which signals are strong enough to identify process injection without hard-coded malware indicators?
-- How much visibility disappears when execution moves to memory?
-- How can legitimate administrative tooling be separated from malicious LOLBin use?
-- Which token transitions are rare enough to be useful?
-- Which persistence changes are normal in enterprise environments?
-- Which telemetry survives attempts to hide the original executable?
+- process identity;
+- memory state;
+- thread state;
+- module inventory;
+- parent/child lineage.
 
-## 9. Safety Boundary
+Sysmon Event 25 provides Process Tampering telemetry.
 
-Experiments should use isolated VMs, synthetic data, local test processes and reversible configuration changes. The user-mode project should not become a general post-exploitation or credential-harvesting framework.
+Source:
+https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-events
+
+---
+
+# 11. User-Mode APT Behavior Graph
+
+A useful abstraction is:
+
+~~~text
+initial execution
+      ↓
+discovery/configuration
+      ↓
+security-context manipulation
+      ↓
+process/memory manipulation
+      ↓
+trusted execution
+      ↓
+persistence
+      ↓
+network communication
+      ↓
+handoff to another privilege boundary
+~~~
+
+Each arrow is a possible detection opportunity.
+
+The final detector should be based on relationships, not merely the presence of individual capabilities.
+
+---
+
+# 12. Detection Research Matrix
+
+Every capability should record:
+
+| Field | Required analysis |
+|---|---|
+| Primitive | Which Windows facility is being abused? |
+| Preconditions | What access/privilege is required? |
+| State change | What object or process changes? |
+| APT value | Stealth, privilege, persistence, execution |
+| Telemetry | Which events observe it? |
+| Blind spots | What remains invisible? |
+| Benign analogues | Who legitimately does the same thing? |
+| Detector | What behavioral correlation is proposed? |
+| Prevention | Which control constrains it? |
+| Validation | How is precision measured? |
+
+---
+
+# 13. Validation Method
+
+Use at least three workloads:
+
+~~~text
+A. normal application
+B. legitimate security/admin tool
+C. synthetic suspicious analogue
+~~~
+
+Capture telemetry, align event timestamps and compare process graphs.
+
+Measure:
+
+- event coverage;
+- precision;
+- false positives;
+- detection latency;
+- contextual features;
+- prevention effectiveness.
+
+Do not validate only by asking whether a single alert fired.
+
+---
+
+# 14. Research Questions
+
+- Which injection signals are stable across different implementations?
+- What evidence remains when execution moves to memory?
+- How can token manipulation be separated from legitimate impersonation?
+- Which trusted binaries create the most detection ambiguity?
+- Which startup mechanisms are common enough to create false positives?
+- Which behavioral features survive command obfuscation?
+- Which user-mode signals remain available after an attacker changes process state?
+
+---
+
+# 15. Safety Boundary
+
+Chronos.UserMode should remain a controlled behavioral research environment.
+
+Do not evolve it into:
+
+- a credential-harvesting system;
+- a general post-exploitation framework;
+- a remote-access toolkit;
+- autonomous lateral-movement tooling;
+- destructive payload infrastructure.
+
+The research target is Windows mechanism + telemetry + detection + prevention.

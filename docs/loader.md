@@ -1,81 +1,154 @@
 # Chronos Loader Research
 
-## Purpose
+## Mission
 
-Chronos.Loader studies the staging and delivery layer of a multi-stage Windows threat. The research question is not simply how a loader starts another program; it is how a sophisticated campaign moves from one artifact or execution context to the next, and what evidence that transition leaves for defenders.
+Chronos.Loader is the laboratory domain for studying how a sophisticated Windows intrusion moves from one execution stage to another.
 
-The model is:
+A loader is not interesting merely because it launches another program. At APT scale, the important questions are:
+
+- How is the next stage obtained?
+- Where is it staged?
+- How is it transformed?
+- What execution context is selected?
+- Which trust boundary is crossed?
+- Which artifacts disappear after execution?
+- Which telemetry still proves that the transition occurred?
+
+The research model is:
 
 ~~~text
-artifact acquisition
-      ↓
+delivery
+  ↓
 staging
-      ↓
-reconstruction / preparation
-      ↓
+  ↓
+reconstruction
+  ↓
 execution transfer
-      ↓
-next stage
-      ↓
-telemetry + detection
+  ↓
+next-stage capability
+  ↓
+telemetry
+  ↓
+detection
 ~~~
 
-The offensive side of this document explains why the capability matters. The defensive side explains what should be measured and correlated. Experiments belong in isolated, disposable laboratory systems.
-
-## 1. Multi-Stage Payload Staging
-
-### Capability
-
-A capable loader can split a campaign into multiple stages so the initial artifact does not contain the complete functionality. Stage boundaries may separate acquisition, configuration, reconstruction, execution and later capabilities.
-
-APT relevance comes from reducing coupling between delivery and payload functionality.
-
-### Offensive perspective
-
-A staged design lets an operator change later components without changing the initial artifact and can make the first stage look less interesting than the eventual payload.
-
-MITRE ATT&CK models retrieval of additional tools or files as T1105 Ingress Tool Transfer.
-
-**Offensive/tradecraft source:**  
-https://attack.mitre.org/techniques/T1105/
-
-### Defensive perspective
-
-Detect the chain rather than one artifact:
-
-~~~text
-network connection
-      +
-file creation
-      +
-process creation
-      +
-new image/module
-      =
-staging sequence
-~~~
-
-Useful evidence includes unusual outbound connections, newly created executable content, execution shortly after transfer, rare parent/child relationships and abnormal signer/path combinations.
-
-**Detection source:**  
-MITRE ATT&CK T1105: https://attack.mitre.org/techniques/T1105/  
-Microsoft Sysmon telemetry: https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
-
-Sysmon events especially useful to Chronos research include Process Create (1), Network Connect (3), Image Load (7) and File Create (11).
-
-### Chronos research question
-
-Which event combinations distinguish legitimate software update/download workflows from suspicious staged execution?
+The offensive side exists to explain the mechanism. The defensive side determines which evidence survives it.
 
 ---
 
-## 2. Trusted-Binary Proxy Execution
+# 1. Capability Map
 
-### Capability
+| Capability | ATT&CK | APT value | Primary evidence |
+|---|---|---|---|
+| Multi-stage acquisition | T1105 | Separates delivery from capability | Network + file + process chain |
+| Proxy execution | T1218 | Reuses trusted binaries | Process + signer + module + network |
+| Memory-oriented loading | T1620 | Reduces disk dependence | Memory + thread + process-access evidence |
+| Obfuscation | T1027 | Weakens static signatures | Reconstruction + command/file behavior |
+| Masquerading | T1036 | Exploits trust in names/paths | Identity/provenance mismatch |
+| Execution gating | T1480 | Limits activation to conditions | Environment-dependent behavior |
+| Staging/provenance abuse | Cross-technique | Blends with legitimate software | Path + creator + ancestry |
+| Component handoff | Cross-technique | Splits capability across processes | Temporal/process correlation |
 
-A staged payload may use a trusted operating-system component as the execution vehicle. ATT&CK calls this System Binary Proxy Execution, T1218.
+---
 
-The important property is the trust mismatch:
+# 2. Multi-Stage Acquisition
+
+## Capability
+
+A staged loader separates the initial artifact from later functionality.
+
+~~~text
+S0 initial execution
+ ↓
+S1 configuration / target decision
+ ↓
+S2 acquire or access next-stage data
+ ↓
+S3 reconstruct / validate
+ ↓
+S4 transfer execution
+ ↓
+S5 second-stage behavior
+~~~
+
+MITRE ATT&CK T1105 covers transfer of tools or files into a compromised environment. Its current detection strategy explicitly emphasizes unusual processes making network connections followed by file creation.
+
+Offensive/tradecraft source:
+https://attack.mitre.org/techniques/T1105/
+
+### Offensive perspective
+
+APT value comes from architectural separation:
+
+- stage A can remain small;
+- later capabilities can change independently;
+- stages can use different execution contexts;
+- the initial artifact need not resemble the final capability;
+- each stage can have different provenance.
+
+The key insight is that the campaign is a chain, not one file.
+
+### Defensive perspective
+
+Do not make "file downloaded" the analytic.
+
+Correlate:
+
+~~~text
+rare process
+   +
+network connection
+   +
+new artifact
+   +
+execution shortly afterward
+   +
+unexpected signer/path
+~~~
+
+Microsoft Sysmon Event 1 records process creation, Event 3 network connections, Event 7 image loads and Event 11 file creation. Those events can form a timeline for staged execution.
+
+Detection sources:
+https://attack.mitre.org/techniques/T1105/
+https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-events
+
+### Detection hypothesis
+
+A process whose network behavior is unusual for its role and which subsequently creates and executes a new artifact deserves more scrutiny than either event alone.
+
+### Prevention
+
+- outbound network controls;
+- application control;
+- endpoint behavior prevention;
+- script/executable restrictions;
+- least privilege;
+- controlled egress.
+
+### Failure modes
+
+Common benign lookalikes include:
+
+- software updaters;
+- enterprise deployment agents;
+- browsers;
+- package managers;
+- backup agents;
+- developer tooling.
+
+The detector should therefore use role, signer, parentage and destination context rather than filename alone.
+
+### Chronos lab question
+
+Which temporal relationships provide the strongest distinction between a legitimate updater and a synthetic staged execution chain?
+
+---
+
+# 3. Trusted-Binary Proxy Execution
+
+## Capability
+
+T1218 covers abuse of legitimate operating-system binaries as execution vehicles.
 
 ~~~text
 untrusted content
@@ -87,104 +160,176 @@ security-relevant execution
 
 ### Offensive perspective
 
-The advantage is that a trusted component already exists in the environment and may have reputation, signature and administrative-use legitimacy.
+The APT value comes from reusing software already present, signed and commonly expected.
 
-**Offensive/tradecraft source:**  
+The important distinction is:
+
+~~~text
+trusted binary
+≠
+trusted invocation
+~~~
+
+Source:
 https://attack.mitre.org/techniques/T1218/
 
 ### Defensive perspective
 
-Signature alone is weak. Correlate signer, image path, parent process, command-line structure, child process, loaded modules, user/integrity context and network destinations.
+Evaluate:
 
-The key analytic is:
+- signer;
+- image path;
+- parent process;
+- command-line shape;
+- referenced content;
+- loaded modules;
+- network destinations;
+- user/integrity context.
 
-~~~text
-Is this trusted component behaving normally in this context?
-~~~
+MITRE's current detection strategy correlates trusted Microsoft-signed binaries with process creation, module loads and network activity. For Regsvr32 specifically, MITRE recommends examining unusual paths, modules, network traffic and parent processes.
 
-**Detection source:**  
-Microsoft Defender ASR reference: https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference  
-MITRE ATT&CK T1218: https://attack.mitre.org/techniques/T1218/
+Detection sources:
+https://attack.mitre.org/detectionstrategies/DET0081/
+https://attack.mitre.org/detectionstrategies/DET0282/
+
+### Detection hypothesis
+
+A trusted binary becomes suspicious when its execution graph differs materially from its normal enterprise role.
+
+### Prevention
+
+- application control;
+- ASR controls;
+- reduce unnecessary administrative binaries;
+- constrain scripting;
+- egress filtering.
+
+### Chronos lab question
+
+How much false-positive reduction is gained by profiling normal use of each trusted binary before defining a malicious-use analytic?
 
 ---
 
-## 3. Reflective / Memory-Oriented Stage Loading
+# 4. Memory-Oriented Stage Loading
 
-### Capability
+## Capability
 
-Reflective Code Loading, T1620, describes execution of code from process memory without a conventional disk-backed executable transition.
+T1620 Reflective Code Loading describes execution of code from process memory without a conventional disk-backed execution transition.
 
 ~~~text
-traditional:
-disk → process → execute
+disk-oriented
+artifact → image → execution
 
-memory-oriented:
-data → memory → execute
+memory-oriented
+data → memory → execution
 ~~~
 
 ### Offensive perspective
 
-The capability reduces dependence on ordinary on-disk payload artifacts and can mask execution inside a legitimate process.
+The primary advantage is reduced disk provenance. A file-centric detector may see no new executable even though the process's memory and thread state change substantially.
 
-**Offensive/tradecraft source:**  
+Source:
 https://attack.mitre.org/techniques/T1620/
 
 ### Defensive perspective
 
-File absence does not mean absence of evidence. Investigate unusual cross-process memory access, executable private memory, abnormal thread start locations, process tampering and unexpected memory-backed execution.
+Investigate:
 
-**Detection source:**  
-MITRE T1620: https://attack.mitre.org/techniques/T1620/  
-Microsoft Sysmon: https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
+- cross-process memory access;
+- executable private memory;
+- abnormal thread creation;
+- thread start locations;
+- module provenance;
+- process tampering;
+- parentage and timing.
 
-Relevant Sysmon events include CreateRemoteThread (8), ProcessAccess (10) and ProcessTampering (25).
+Sysmon Events 8 and 10 can support process-injection and memory-abuse investigations.
+
+Source:
+https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-events
+
+### Detection hypothesis
+
+The strongest signal is often an inconsistency between the process's normal module inventory and its memory/thread execution state.
+
+### Prevention
+
+- endpoint behavior prevention;
+- application control;
+- protected processes where applicable;
+- exploit mitigations;
+- least privilege.
+
+### Chronos lab question
+
+Which memory-related signals remain available when normal file staging telemetry is absent?
 
 ---
 
-## 4. Obfuscation and Stage Reconstruction
+# 5. Obfuscation and Reconstruction
 
-### Capability
+## Capability
 
-Payloads may be transformed through encoding, compression, encryption, padding or other representations. ATT&CK groups these behaviors under T1027 Obfuscated Files or Information.
+T1027 covers obfuscation of files or information. T1027.010 covers command obfuscation.
 
-The defensive model should focus on the transition:
+APT examples documented by MITRE include APT19, APT32 and Aquatic Panda using encoded or obfuscated commands.
 
-~~~text
-transformed representation
-        ↓
-decode / reconstruct
-        ↓
-execution representation
-~~~
+Sources:
+https://attack.mitre.org/techniques/T1027/
+https://attack.mitre.org/techniques/T1027/010/
 
 ### Offensive perspective
 
-Obfuscation primarily attacks static analysis and signature assumptions. It does not necessarily remove behavioral evidence.
+Obfuscation changes representation without necessarily changing semantics.
 
-**Offensive/tradecraft source:**  
-https://attack.mitre.org/techniques/T1027/
+~~~text
+representation A
+      ↓
+transform
+      ↓
+representation B
+      ↓
+same behavior
+~~~
+
+Its main value is weakening static signatures and simplistic text matching.
 
 ### Defensive perspective
 
-Useful signals include unusual entropy, encoded content followed by execution, abnormal command-line syntax, suspicious archive/encryption utilities and payload reconstruction immediately before execution.
+MITRE's current behavioral strategy correlates suspicious processes with creation or modification of encoded, compressed or encrypted content and abnormal command-line syntax.
 
-**Detection source:**  
-MITRE behavioral detection for T1027: https://attack.mitre.org/detectionstrategies/DET0378/  
-Microsoft Defender ASR: https://learn.microsoft.com/en-us/defender-endpoint/attack-surface-reduction-rules-reference
+Source:
+https://attack.mitre.org/detectionstrategies/DET0378/
+
+Useful features:
+
+- command length;
+- token rarity;
+- encoding indicators;
+- reconstruction immediately before execution;
+- process ancestry;
+- file creation;
+- timing.
+
+### Detection hypothesis
+
+Detect the behavioral transition from transformed data to execution rather than trying to enumerate every representation.
+
+### Chronos lab question
+
+Which behavioral features remain stable when the same semantic payload is represented in multiple ways?
 
 ---
 
-## 5. Masquerading and Execution-Chain Deception
+# 6. Masquerading and Provenance
 
-### Capability
+## Capability
 
-Sophisticated malware may make filenames, directories, services or process relationships resemble legitimate software.
+T1036 covers behaviors that make malicious artifacts appear legitimate through naming, path or identity cues.
 
 ### Offensive perspective
 
-The weakness being exploited is human and analytic trust in names and paths.
-
-A robust identity model is:
+The attacker exploits a trust hierarchy:
 
 ~~~text
 name
@@ -200,31 +345,168 @@ parentage
 behavior
 ~~~
 
-**Offensive/tradecraft source:**  
-https://attack.mitre.org/techniques/T1036/
-
 ### Defensive perspective
 
-Compare claimed identity with digital signature, canonical installation location, parent process, child behavior and network activity.
+Compare the claimed identity with:
 
-**Detection source:**  
-https://attack.mitre.org/techniques/T1036/  
-https://learn.microsoft.com/en-us/windows/security/operating-system-security/sysmon/sysmon-configuration-files
+- canonical installation path;
+- digital signer;
+- version metadata;
+- parent process;
+- children;
+- network role;
+- user context.
+
+Source:
+https://attack.mitre.org/techniques/T1036/
+
+### Chronos lab question
+
+Which provenance inconsistencies are strong enough to survive normal software-renaming and installation variation?
 
 ---
 
-## 6. Loader Research Standard
+# 7. Execution Gating
 
-Every loader experiment should document:
+## Capability
 
-1. capability being studied
-2. Windows primitive involved
-3. preconditions
-4. observable behavior
-5. telemetry generated
-6. legitimate equivalents
-7. detection hypothesis
-8. false-positive risks
-9. prevention opportunities
+T1480 covers execution guardrails where behavior is restricted by environment, target or other conditions.
 
-The target output is not a reusable intrusion loader. It is a reproducible explanation of how staging becomes observable.
+### Offensive perspective
+
+The value is reducing activation outside the intended context.
+
+~~~text
+environment predicate
+      ↓
+true  → continue
+false → altered / inert behavior
+~~~
+
+This explains why a sample that behaves quietly in a generic sandbox may still represent a sophisticated threat.
+
+### Defensive perspective
+
+Run controlled executions across changed environmental conditions and record:
+
+- code path;
+- network behavior;
+- artifact creation;
+- timing;
+- configuration reads;
+- process graph.
+
+Source:
+https://attack.mitre.org/techniques/T1480/
+
+### Chronos lab question
+
+Can the decision process itself reveal target-gating behavior even when the final capability does not activate?
+
+---
+
+# 8. Staging Location and Provenance
+
+A loader may stage artifacts in locations also used by browsers, installers, update agents or applications.
+
+The location by itself is weak evidence.
+
+A stronger feature is:
+
+~~~text
+location
+ +
+creator
+ +
+file type
+ +
+signer
+ +
+execution timing
+ +
+parentage
+~~~
+
+Chronos should explicitly compare legitimate software with suspicious analogues using the same directories.
+
+---
+
+# 9. Component Handoff
+
+APT architectures often distribute functionality across multiple processes or trust boundaries.
+
+~~~text
+stage A
+ ↓
+stage B
+ ↓
+service / driver
+ ↓
+other execution boundary
+~~~
+
+This can make each process look less significant by itself.
+
+### Defensive model
+
+Represent the host as a graph:
+
+- process nodes;
+- file nodes;
+- network nodes;
+- service nodes;
+- driver nodes;
+- timestamps;
+- security contexts.
+
+Search for unusual transitions rather than isolated indicators.
+
+---
+
+# 10. Research Matrix
+
+Every loader capability should record:
+
+| Field | Required analysis |
+|---|---|
+| Preconditions | What must already be true? |
+| Primitive | Process, file, network, memory |
+| Security objective | Delivery, stealth, handoff |
+| APT value | Why an advanced actor uses it |
+| Artifacts | Files, processes, modules, network |
+| Telemetry | Which sources observe it |
+| Detection | Correlation hypothesis |
+| Benign analogue | Legitimate software behavior |
+| False positives | Where the rule breaks |
+| Prevention | Control that constrains it |
+| Validation | How the hypothesis is tested |
+
+---
+
+# 11. Research Method
+
+Use three workloads:
+
+~~~text
+A. normal workload
+B. legitimate administrative/update workload
+C. synthetic suspicious analogue
+~~~
+
+Capture telemetry, align timestamps, compare process/file/network graphs and derive discriminating features.
+
+The output should be a detection hypothesis, not an operational intrusion component.
+
+---
+
+# 12. Safety Boundary
+
+Chronos.Loader should not become:
+
+- credential-theft infrastructure;
+- unrestricted command-and-control;
+- general-purpose payload delivery;
+- autonomous persistence deployment;
+- target-selection tooling.
+
+The research boundary is mechanism + telemetry + detection.

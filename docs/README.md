@@ -224,3 +224,8 @@ REGRESSION COVERED
 ~~~
 
 This distinction is important: the goal is a detection system whose coverage can be measured and audited rather than a large collection of undocumented malware demonstrations.
+
+
+## Vulnerability Research
+
+[Zero-Day and Vulnerability Research](vulnerability-research.md) defines the discovery, fuzzing, triage, patching, regression-testing and responsible-disclosure lifecycle. The root `security-research/` workspace is reserved for corresponding case artifacts.

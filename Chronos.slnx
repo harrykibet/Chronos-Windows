@@ -5,18 +5,18 @@
   </Configurations>
   <Folder Name="/Detection/" />
   <Folder Name="/Infrastructure/">
-    <Project Path="common/Chronos.Common/Chronos.Common.vcxproj" />
+    <Project Path="common/Chronos.Common/Chronos.Common.vcxproj" Id="beefbb2a-ba0f-4c78-89fc-e061524b847c" />
   </Folder>
   <Folder Name="/Research/">
-    <Project Path="src/Chronos.Firmware/Chronos.Firmware.vcxproj" />
+    <Project Path="src/Chronos.Firmware/Chronos.Firmware.vcxproj" Id="e2086717-ca56-4f47-9af2-8c944b080aa3" />
     <Project Path="src/Chronos.Kernel/Chronos.Kernel.vcxproj">
       <Platform Project="x64" />
       <Deploy />
     </Project>
-    <Project Path="src/Chronos.Loader/Chronos.Loader.vcxproj">
+    <Project Path="src/Chronos.Loader/Chronos.Loader.vcxproj" Id="4a20e7be-2858-4a2e-bb4d-27e84adcc461">
       <BuildDependency Project="common/Chronos.Common/Chronos.Common.vcxproj" />
     </Project>
-    <Project Path="src/Chronos.UserMode/Chronos.UserMode.vcxproj">
+    <Project Path="src/Chronos.UserMode/Chronos.UserMode.vcxproj" Id="e1be4422-a1ad-4d10-b1d9-5c2822bd7a78">
       <BuildDependency Project="common/Chronos.Common/Chronos.Common.vcxproj" />
     </Project>
   </Folder>

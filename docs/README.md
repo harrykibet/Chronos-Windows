@@ -179,3 +179,48 @@ Chronos experiments belong in controlled environments:
 - isolated networks.
 
 The repository should remain a research platform for understanding mechanisms and validating defenses, not a generalized offensive deployment framework.
+
+
+## Comprehensive Capability Coverage
+
+The repository now maintains a dedicated [Capability Coverage Matrix](capability-coverage.md).
+
+That matrix is the canonical gap-analysis document for the detection engine. It covers:
+
+- execution and staging;
+- persistence and autostart;
+- privilege escalation;
+- defense evasion;
+- credential access;
+- discovery;
+- collection;
+- command and control;
+- impact;
+- kernel/driver abuse;
+- rootkit mechanisms;
+- UEFI/bootkit/firmware mechanisms;
+- ACPI and firmware-to-OS trust;
+- Secure Boot, Trusted Boot, ELAM and Measured Boot;
+- Windows telemetry and cross-view consistency.
+
+A capability should not be marked "covered" merely because it appears in documentation. The matrix defines the progression:
+
+~~~text
+DISCOVERED
+  ↓
+DOCUMENTED
+  ↓
+SAFE SIMULATION
+  ↓
+TELEMETRY CAPTURED
+  ↓
+DETECTOR IMPLEMENTED
+  ↓
+FALSE-POSITIVE TESTED
+  ↓
+MITIGATION VALIDATED
+  ↓
+REGRESSION COVERED
+~~~
+
+This distinction is important: the goal is a detection system whose coverage can be measured and audited rather than a large collection of undocumented malware demonstrations.

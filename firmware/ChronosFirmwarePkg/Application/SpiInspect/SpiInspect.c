@@ -35,7 +35,9 @@ PrintDescriptor (
     L"Base",
     L"Limit",
     L"Length",
-    L"State"
+    L"State",
+    L"Bounds",
+    L"Overlap"
     );
 
   for (Index = 0; Index < Descriptor->RegionCount; ++Index) {

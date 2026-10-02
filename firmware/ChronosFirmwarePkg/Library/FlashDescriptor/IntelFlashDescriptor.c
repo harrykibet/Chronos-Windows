@@ -197,29 +197,13 @@ ChronosIntelFlashDescriptorParse (
 
   SignatureOffset = CHRONOS_INTEL_DESCRIPTOR_SIGNATURE_OFFSET;
 
+  /*
+   * Intel documents the descriptor signature at offset 0x10. Chronos reads
+   * the first flash block as the descriptor image, so a signature elsewhere
+   * is treated as an invalid descriptor rather than guessing a new base.
+   */
   if (ReadLe32 (Image + SignatureOffset) != CHRONOS_INTEL_FD_SIGNATURE) {
-    BOOLEAN Found;
-
-    Found = FALSE;
-
-    /*
-     * Intel documents the signature at 0x10, but scanning aligned dwords
-     * gives the reader useful diagnostics for descriptor images whose
-     * descriptor base is shifted by a platform-specific implementation.
-     */
-    for (SignatureOffset = 0;
-         SignatureOffset + sizeof (UINT32) <= sizeof (Image);
-         SignatureOffset += sizeof (UINT32)) {
-      if (ReadLe32 (Image + SignatureOffset) ==
-          CHRONOS_INTEL_FD_SIGNATURE) {
-        Found = TRUE;
-        break;
-      }
-    }
-
-    if (!Found) {
-      return EFI_NOT_FOUND;
-    }
+    return EFI_NOT_FOUND;
   }
 
   /*
@@ -300,6 +284,39 @@ ChronosIntelFlashDescriptorParse (
       Index,
       &Descriptor->Regions[Index]
       );
+
+    if (!Descriptor->Regions[Index].IsUnused) {
+      if (Descriptor->Regions[Index].Base >= Flash->FlashSize ||
+          Descriptor->Regions[Index].Length >
+            (Flash->FlashSize - Descriptor->Regions[Index].Base)) {
+        Descriptor->Regions[Index].IsOutOfBounds = TRUE;
+      }
+    }
+  }
+
+  /*
+   * Region ranges should not overlap. Overlap does not necessarily mean the
+   * descriptor is unreadable, so the parser records the anomaly and leaves
+   * the raw map available for forensic analysis.
+   */
+  for (Index = 0; Index < RegionCount; ++Index) {
+    UINT32 Other;
+
+    if (Descriptor->Regions[Index].IsUnused) {
+      continue;
+    }
+
+    for (Other = 0; Other < Index; ++Other) {
+      if (Descriptor->Regions[Other].IsUnused) {
+        continue;
+      }
+
+      if (Descriptor->Regions[Index].Base <= Descriptor->Regions[Other].Limit &&
+          Descriptor->Regions[Other].Base <= Descriptor->Regions[Index].Limit) {
+        Descriptor->Regions[Index].IsOverlapping = TRUE;
+        Descriptor->Regions[Other].IsOverlapping = TRUE;
+      }
+    }
   }
 
   return EFI_SUCCESS;

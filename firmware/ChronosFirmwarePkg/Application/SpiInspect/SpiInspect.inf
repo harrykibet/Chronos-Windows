@@ -24,8 +24,5 @@
   BaseMemoryLib
   PrintLib
 
-[Guids]
-  gEfiSpiNorFlashProtocolGuid
-
 [Protocols]
   gEfiSpiNorFlashProtocolGuid

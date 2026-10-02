@@ -229,3 +229,9 @@ This distinction is important: the goal is a detection system whose coverage can
 ## Vulnerability Research
 
 [Zero-Day and Vulnerability Research](vulnerability-research.md) defines the discovery, fuzzing, triage, patching, regression-testing and responsible-disclosure lifecycle. The root `security-research/` workspace is reserved for corresponding case artifacts.
+
+
+## Firmware Hardware Research
+
+- [Firmware Hardware Surfaces](firmware-hardware-surfaces.md)
+- [Intel Flash Descriptor Parsing and Region Mapping](firmware-intel-flash-descriptor.md)

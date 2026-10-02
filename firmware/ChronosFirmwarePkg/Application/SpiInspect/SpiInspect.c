@@ -29,7 +29,7 @@ PrintDescriptor (
   Print (L"  Region count     : %u\n\n", Descriptor->RegionCount);
 
   Print (
-    L"  %-2s %-22s %-12s %-12s %-12s %s\n",
+    L"  %-2s %-22s %-12s %-12s %-12s %s %s %s\n",
     L"#",
     L"Name",
     L"Base",
@@ -51,7 +51,9 @@ PrintDescriptor (
       Region->Limit,
       Region->Length,
       Region->IsUnused ? L"unused" : L"active",
-      Region->IsReserved ? L" reserved" : L""
+      Region->IsReserved ? L" reserved" : L"",
+      Region->IsOutOfBounds ? L" out-of-bounds" : L"",
+      Region->IsOverlapping ? L" overlapping" : L""
       );
   }
 

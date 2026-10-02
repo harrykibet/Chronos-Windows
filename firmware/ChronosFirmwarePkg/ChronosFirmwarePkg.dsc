@@ -14,14 +14,17 @@
   ChronosFirmwarePkg/ChronosFirmwarePkg.dec
 
 [LibraryClasses]
-  UefiApplicationEntryPoint
-  UefiLib
-  UefiBootServicesTableLib
-  BaseLib
-  MemoryAllocationLib
-  BaseMemoryLib
-  PrintLib
-  DebugLib
+  UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
+  UefiLib|MdePkg/Library/UefiLib/UefiLib.inf
+  UefiBootServicesTableLib|MdePkg/Library/UefiBootServicesTableLib/UefiBootServicesTableLib.inf
+  BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
+  MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
+  BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
+  PrintLib|MdePkg/Library/BasePrintLib/BasePrintLib.inf
+  DebugLib|MdePkg/Library/UefiDebugLibConOut/UefiDebugLibConOut.inf
+
+[LibraryClasses.common.UEFI_APPLICATION]
+  PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
 
 [Components]
   ChronosFirmwarePkg/Application/SpiInspect/SpiInspect.inf

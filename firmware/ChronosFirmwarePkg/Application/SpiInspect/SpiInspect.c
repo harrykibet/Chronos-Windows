@@ -5,6 +5,73 @@
 #include <Library/UefiLib.h>
 
 #include "../../Library/SpiFlash/SpiFlash.h"
+#include "../../Library/FlashDescriptor/IntelFlashDescriptor.h"
+
+STATIC
+VOID
+PrintDescriptor (
+  IN CONST CHRONOS_INTEL_FLASH_DESCRIPTOR *Descriptor
+  )
+{
+  UINT32 Index;
+
+  Print (L"\nIntel Flash Descriptor\n");
+  Print (L"  Signature offset : 0x%04x\n", Descriptor->SignatureOffset);
+  Print (L"  Signature        : 0x%08x\n", Descriptor->Signature);
+  Print (L"  FLMAP0           : 0x%08x\n", Descriptor->FlashMap0);
+  Print (L"  FLMAP1           : 0x%08x\n", Descriptor->FlashMap1);
+  Print (L"  FLMAP2           : 0x%08x\n", Descriptor->FlashMap2);
+  Print (L"  FCBA             : 0x%04x\n", Descriptor->ComponentBase);
+  Print (L"  FRBA             : 0x%04x\n", Descriptor->RegionBase);
+  Print (L"  FMBA             : 0x%04x\n", Descriptor->MasterBase);
+  Print (L"  FPSBA            : 0x%04x\n", Descriptor->StrapBase);
+  Print (L"  Strap length     : 0x%04x\n", Descriptor->StrapLength);
+  Print (L"  Region count     : %u\n\n", Descriptor->RegionCount);
+
+  Print (
+    L"  %-2s %-22s %-12s %-12s %-12s %s\n",
+    L"#",
+    L"Name",
+    L"Base",
+    L"Limit",
+    L"Length",
+    L"State"
+    );
+
+  for (Index = 0; Index < Descriptor->RegionCount; ++Index) {
+    CONST CHRONOS_INTEL_FLASH_REGION *Region;
+
+    Region = &Descriptor->Regions[Index];
+
+    Print (
+      L"  %-2u %-22s %08x     %08x     %08x     %s%s\n",
+      Index,
+      ChronosIntelFlashRegionName (Index),
+      Region->Base,
+      Region->Limit,
+      Region->Length,
+      Region->IsUnused ? L"unused" : L"active",
+      Region->IsReserved ? L" reserved" : L""
+      );
+  }
+
+  Print (L"\n");
+
+  if (Descriptor->RegionCount > 0) {
+    CONST CHRONOS_INTEL_FLASH_REGION *Bios;
+
+    Bios = &Descriptor->Regions[ChronosFlashRegionBios];
+
+    if (!Bios->IsUnused) {
+      Print (
+        L"  BIOS region: 0x%08x - 0x%08x (%u bytes)\n",
+        Bios->Base,
+        Bios->Limit,
+        Bios->Length
+        );
+    }
+  }
+}
 
 STATIC
 VOID
@@ -29,6 +96,7 @@ UefiMain (
 {
   EFI_STATUS Status;
   CHRONOS_SPI_FLASH Flash;
+  CHRONOS_INTEL_FLASH_DESCRIPTOR Descriptor;
   UINT8 Buffer[64];
 
   (VOID)ImageHandle;
@@ -47,6 +115,16 @@ UefiMain (
   Print (L"Flash size: %u bytes (0x%x)\n", Flash.FlashSize, Flash.FlashSize);
   Print (L"Erase block: %u bytes\n", Flash.EraseBlockSize);
   PrintHexId (&Flash);
+
+  Status = ChronosIntelFlashDescriptorParse (&Flash, &Descriptor);
+  if (EFI_ERROR (Status)) {
+    Print (
+      L"Chronos: Intel Flash Descriptor not available/valid: %r\n",
+      Status
+      );
+  } else {
+    PrintDescriptor (&Descriptor);
+  }
 
   Status = ChronosSpiFlashRead (&Flash, 0, sizeof (Buffer), Buffer);
   if (EFI_ERROR (Status)) {

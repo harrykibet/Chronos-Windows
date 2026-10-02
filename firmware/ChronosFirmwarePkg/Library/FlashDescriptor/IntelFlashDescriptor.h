@@ -40,6 +40,8 @@ typedef struct {
   UINT32 Length;
   BOOLEAN IsUnused;
   BOOLEAN IsReserved;
+  BOOLEAN IsOutOfBounds;
+  BOOLEAN IsOverlapping;
   CHRONOS_INTEL_FLASH_REGION_TYPE Type;
 } CHRONOS_INTEL_FLASH_REGION;
 

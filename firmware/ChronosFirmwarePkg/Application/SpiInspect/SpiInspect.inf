@@ -1,0 +1,30 @@
+[Defines]
+  INF_VERSION                    = 0x0001001B
+  BASE_NAME                      = ChronosSpiInspect
+  FILE_GUID                      = 2B73F3E0-2F19-4E31-9A68-0E7E6A6CE902
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 0.1
+  ENTRY_POINT                    = UefiMain
+
+[Sources]
+  SpiInspect.c
+  ../../Library/SpiFlash/SpiFlash.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  ChronosFirmwarePkg/ChronosFirmwarePkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  UefiBootServicesTableLib
+  MemoryAllocationLib
+  BaseMemoryLib
+  PrintLib
+
+[Guids]
+  gEfiSpiNorFlashProtocolGuid
+
+[Protocols]
+  gEfiSpiNorFlashProtocolGuid

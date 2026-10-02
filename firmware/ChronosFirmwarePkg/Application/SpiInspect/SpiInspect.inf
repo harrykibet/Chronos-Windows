@@ -9,6 +9,7 @@
 [Sources]
   SpiInspect.c
   ../../Library/SpiFlash/SpiFlash.c
+  ../../Library/FlashDescriptor/IntelFlashDescriptor.c
 
 [Packages]
   MdePkg/MdePkg.dec

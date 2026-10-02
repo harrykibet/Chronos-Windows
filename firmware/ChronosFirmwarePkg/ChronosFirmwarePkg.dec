@@ -4,8 +4,5 @@
   PACKAGE_GUID                   = 9C8F5C7E-8D8D-4C9A-A1B6-3D8E72E1C401
   PACKAGE_VERSION                = 0.1
 
-[Includes.common]
-  Include
-
 [Guids]
   gChronosFirmwarePkgGuid = { 0x9c8f5c7e, 0x8d8d, 0x4c9a, { 0xa1, 0xb6, 0x3d, 0x8e, 0x72, 0xe1, 0xc4, 0x01 } }

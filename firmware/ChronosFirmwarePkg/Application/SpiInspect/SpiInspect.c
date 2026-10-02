@@ -46,7 +46,7 @@ PrintDescriptor (
     Region = &Descriptor->Regions[Index];
 
     Print (
-      L"  %-2u %-22s %08x     %08x     %08x     %s%s\n",
+      L"  %-2u %-22s %08x     %08x     %08x     %s%s%s%s\n",
       Index,
       ChronosIntelFlashRegionName (Index),
       Region->Base,

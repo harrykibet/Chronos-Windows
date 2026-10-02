@@ -117,11 +117,18 @@ DecodeRegion (
   Region->Base = BaseUnit << 12;
   Region->Limit = (LimitUnit << 12) | 0xFFFU;
 
-  if (Region->RawRegister == 0 ||
-      Region->Base > Region->Limit) {
+  /*
+   * Intel uses a base field of 0x7FFF with a zero limit field as the
+   * conventional "unused region" encoding. FLREG0 == 0 is different:
+   * it legitimately describes the descriptor at 0x00000000-0x00000FFF.
+   */
+  if (BaseUnit == 0x7FFFU && LimitUnit == 0) {
     Region->IsUnused = TRUE;
     Region->Base = 0;
     Region->Limit = 0;
+    Region->Length = 0;
+  } else if (Region->Base > Region->Limit) {
+    Region->IsUnused = TRUE;
     Region->Length = 0;
   } else {
     Region->Length = Region->Limit - Region->Base + 1;

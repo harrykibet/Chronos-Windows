@@ -610,3 +610,24 @@ The research objective is to discover what evidence a defender can reliably obta
 All firmware experiments should use emulation, virtualization or disposable laboratory hardware specifically intended for research.
 
 Do not use production firmware, unknown flashing utilities or irreversible modification paths as part of normal Chronos experiments.
+
+# Hardware Surface Expansion
+
+SPI NOR flash is Chronos's first firmware storage target, but it is not the complete platform trust surface.
+
+See [Firmware Hardware Surfaces](firmware-hardware-surfaces.md) for the broader model covering:
+
+- SPI flash regions;
+- UEFI NVRAM/firmware variables;
+- TPM;
+- Embedded Controller;
+- PCI Option ROMs;
+- NVMe/storage firmware;
+- NIC/GPU/device firmware;
+- BMC/management-controller firmware;
+- UEFI UpdateCapsule and ESRT;
+- Secure/Measured Boot relationships.
+
+The first implementation deliberately uses the standard UEFI Platform Initialization SPI NOR protocol instead of immediately programming chipset-specific controller registers. The UEFI PI specification defines the SPI NOR protocol with flash-ID, read, write and erase operations.
+
+For physical hardware, Chronos currently enables read-only SPI acquisition. Physical writes are intentionally blocked until flash-region permissions, descriptor parsing, protected regions, backup/verification, recovery and platform-specific safeguards are implemented.
